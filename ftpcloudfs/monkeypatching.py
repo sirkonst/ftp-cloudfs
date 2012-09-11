@@ -28,6 +28,7 @@ class MyFTPHandler(ftpserver.FTPHandler):
     timeout = 0
     dtp_handler = MyDTPHandler
     authorizer = RackspaceCloudAuthorizer()
+    max_cons_per_ip = 0
 
     @staticmethod
     def abstracted_fs(root, cmd_channel):
@@ -57,18 +58,21 @@ class MyFTPHandler(ftpserver.FTPHandler):
 
     def handle(self):
         """Track the ip and check max cons per ip (if needed)"""
-        if self.server.max_cons_per_ip and self.remote_ip and self.shared_ip_map != None:
+
+        if self.max_cons_per_ip and self.remote_ip and self.shared_ip_map != None:
+            count = 0
             try:
                 self.shared_lock.acquire()
-                count = self.shared_ip_map.get(self.remote_ip, 0)
-                self.shared_ip_map[self.remote_ip] = count + 1
-                self.shared_lock.release()
+                count = self.shared_ip_map.get(self.remote_ip, 0) + 1
+                self.shared_ip_map[self.remote_ip] = count
+
+                self.logline("Connection track: %s -> %s" % (self.remote_ip, count))
             except RemoteError, e:
                 self.logerror("Connection tracking failed: %s" % e)
+            finally:
+                self.shared_lock.release()
 
-            self.logline("Connection track: %s -> %s" % (self.remote_ip, count+1))
-
-            if self.shared_ip_map[self.remote_ip] > self.server.max_cons_per_ip:
+            if count > self.max_cons_per_ip:
                 self.handle_max_cons_per_ip()
                 return
 
@@ -78,16 +82,17 @@ class MyFTPHandler(ftpserver.FTPHandler):
 
     def close(self):
         """Remove the ip from the shared map before calling close"""
-        if not self._closed and self.server.max_cons_per_ip and self.shared_ip_map != None:
+        if not self._closed and self.max_cons_per_ip and self.shared_ip_map != None:
             try:
                 self.shared_lock.acquire()
                 if self.remote_ip in self.shared_ip_map:
                     self.shared_ip_map[self.remote_ip] -= 1
                     if self.shared_ip_map[self.remote_ip] <= 0:
                         del self.shared_ip_map[self.remote_ip]
-                self.shared_lock.release()
             except RemoteError, e:
                 self.logerror("Connection tracking cleanup failed: %s" % e)
+            finally:
+                self.shared_lock.release()
 
             self.logline("Disconnected, shared ip map: %s" % self.shared_ip_map)
 

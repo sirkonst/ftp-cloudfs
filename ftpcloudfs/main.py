@@ -294,6 +294,11 @@ class Main(object):
             ftpd.serve_forever()
             return
 
+        # Handling max_cons_per_ip only in handler
+        # because FTPServer does not work with shared_ip_map
+        ftpd.handler.max_cons_per_ip = ftpd.max_cons_per_ip
+        ftpd.max_cons_per_ip = 0
+
         start_garbage_collector()
         daemonContext = self.setup_daemon([ftpd.socket.fileno(),])
         with daemonContext:
