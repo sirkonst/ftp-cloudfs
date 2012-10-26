@@ -109,6 +109,7 @@ class Main(object):
                                   'uid': None,
                                   'gid': None,
                                   'masquerade-firewall': None,
+                                  'force-http': 'no',
                                  })
         config.read(default_config_file)
         if not config.has_section('ftpcloudfs'):
@@ -209,6 +210,12 @@ class Main(object):
                           help="GID to drop the privilige to " + \
                               "when in daemon mode.")
 
+        parser.add_option('--force-http',
+                          action="store_true",
+                          dest="forcehttp",
+                          default=self.config.getboolean('ftpcloudfs', 'force-http'),
+                          help="Force to use http protocol.")
+
         (options, _) = parser.parse_args()
         self.options = options
 
@@ -220,6 +227,7 @@ class Main(object):
         MyFTPHandler.banner = banner
         RackspaceCloudFilesFS.servicenet = self.options.servicenet
         RackspaceCloudFilesFS.authurl = self.options.authurl
+        RackspaceCloudFilesFS.forcehttp = self.options.forcehttp
         RackspaceCloudFilesFS.memcache_hosts = self.options.memcache
         if self.options.workers > 1 and not self.options.memcache:
             RackspaceCloudFilesFS.single_cache = False

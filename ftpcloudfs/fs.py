@@ -34,6 +34,7 @@ class ProxyConnection(Connection):
     """
     def __init__(self, *args, **kwargs):
         self.real_ip = None
+        self.forcehttp = kwargs.pop("forcehttp", False)
         super(ProxyConnection, self).__init__(*args, **kwargs)
 
     def make_request(self, method, path=[], data='', hdrs=None, parms=None):
@@ -52,6 +53,15 @@ class ProxyConnection(Connection):
                 logging.debug("%s, retrying (%s)" % (e, retry))
                 if retry < 0:
                     raise cloudfiles.errors.ResponseError(500, e)
+
+    def _set_storage_url(self, url):
+        url = super(ProxyConnection, self)._set_storage_url(url)
+
+        if self.forcehttp and url.startswith("https://"):
+            url = url.replace("https://", "http://")
+
+        return url
+
 
 def translate_cloudfiles_error(fn):
     """
@@ -372,7 +382,7 @@ class CloudFilesFS(object):
     memcache_hosts = None
 
     @translate_cloudfiles_error
-    def __init__(self, username, api_key, servicenet=False, authurl=None):
+    def __init__(self, username, api_key, servicenet=False, authurl=None, forcehttp=False):
         '''
         Open the Cloudfiles connection
 
@@ -385,6 +395,7 @@ class CloudFilesFS(object):
         self.connection = None
         self.servicenet = servicenet
         self.authurl = authurl
+        self.forcehttp = forcehttp
         if username is not None:
             self.authenticate(username, api_key)
         # A cache to hold the information from the last listdir
@@ -403,6 +414,8 @@ class CloudFilesFS(object):
         # compatibility with old python api versions
         if self.authurl:
             kwargs['authurl'] = self.authurl
+        if self.forcehttp:
+            kwargs["forcehttp"] = self.forcehttp
         self.connection = ProxyConnection(username, api_key, timeout=cloudfiles_api_timeout, **kwargs)
 
     def close(self):
